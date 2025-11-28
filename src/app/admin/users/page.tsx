@@ -1,56 +1,56 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { getCurrentUserAndRole } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
+import { useEffect, useState } from "react";
+import { getCurrentUserAndRole } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function AdminUsersPage() {
   const router = useRouter();
   const [authorised, setAuthorised] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
-  const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Role guard
   useEffect(() => {
     const load = async () => {
       const { user, role } = await getCurrentUserAndRole();
-      if (!user) return router.replace('/login');
-      if (role !== 'ADMIN') return router.replace('/user/dashboard');
+      if (!user) return router.replace("/login");
+      if (role !== "ADMIN") return router.replace("/user/dashboard");
       setAuthorised(true);
 
       const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, role, created_at');
+        .from("profiles")
+        .select("id, full_name, role, created_at")
+        .order("created_at", { ascending: false });
       setUsers(data || []);
     };
-
     load();
   }, [router]);
 
   const inviteUser = async () => {
     setLoading(true);
-
-    const res = await fetch('/api/admin/invite-user', {
-      method: 'POST',
+    const res = await fetch("/api/admin/invite-user", {
+      method: "POST",
       body: JSON.stringify({ email, fullName }),
     });
-
     setLoading(false);
 
-    if (!res.ok) {
-      alert('Failed to invite user');
-      return;
-    }
+    if (!res.ok) return alert("Failed to invite user");
 
-    alert('User invited successfully');
-    setEmail('');
-    setFullName('');
+    alert("User invited successfully");
+    setEmail("");
+    setFullName("");
   };
 
-  if (!authorised) return <div className="p-8">Checking access…</div>;
+  if (!authorised) {
+    return (
+      <div className="p-8">
+        Checking access…
+      </div>
+    );
+  }
 
   return (
     <main className="p-8 space-y-6">
@@ -63,7 +63,7 @@ export default function AdminUsersPage() {
           className="border px-3 py-2 rounded w-full"
           placeholder="Full name"
           value={fullName}
-          onChange={e => setFullName(e.target.value)}
+          onChange={(e) => setFullName(e.target.value)}
         />
 
         <input
@@ -71,7 +71,7 @@ export default function AdminUsersPage() {
           placeholder="Email address"
           type="email"
           value={email}
-          onChange={e => setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.target.value)}
         />
 
         <button
@@ -79,7 +79,7 @@ export default function AdminUsersPage() {
           onClick={inviteUser}
           disabled={loading}
         >
-          {loading ? 'Inviting…' : 'Invite User'}
+          {loading ? "Inviting…" : "Invite User"}
         </button>
       </section>
 
@@ -94,7 +94,7 @@ export default function AdminUsersPage() {
             </tr>
           </thead>
           <tbody>
-            {users.map(u => (
+            {users.map((u) => (
               <tr key={u.id}>
                 <td className="px-3 py-2 border">{u.full_name}</td>
                 <td className="px-3 py-2 border">{u.role}</td>
