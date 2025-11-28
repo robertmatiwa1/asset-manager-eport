@@ -31,7 +31,7 @@ export default function UserDashboard() {
     const { data: assets } = await supabase
       .from("assets")
       .select("id, cost")
-      .eq("created_by", userId);
+      .eq("user_id", userId);  // <-- FIXED HERE
 
     const totalValue = assets?.reduce((acc, asset) => acc + Number(asset.cost), 0) || 0;
 

@@ -65,7 +65,7 @@ export default function UserAssetsPage() {
     const { data } = await supabase
       .from("assets")
       .select("id, name, cost, date_purchased, categories(name), departments(name)")
-      .eq("created_by", uid);
+      .eq("user_id", uid);  // <-- FIXED HERE
 
     setAssets(data || []);
   };
@@ -85,7 +85,7 @@ export default function UserAssetsPage() {
         department_id: form.department_id,
         date_purchased: form.date_purchased,
         cost: form.cost,
-        created_by: userId,
+        user_id: userId,   // <-- FIXED HERE
       },
     ]);
 
