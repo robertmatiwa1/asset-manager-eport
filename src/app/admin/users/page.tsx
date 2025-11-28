@@ -1,61 +1,72 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getCurrentUserAndRole } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { getCurrentUserAndRole } from "@/lib/auth";
 
 export default function AdminUsersPage() {
   const router = useRouter();
+
   const [authorised, setAuthorised] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // -----------------------------
+  // ROLE CHECK
+  // -----------------------------
   useEffect(() => {
     const load = async () => {
       const { user, role } = await getCurrentUserAndRole();
+
       if (!user) return router.replace("/login");
       if (role !== "ADMIN") return router.replace("/user/dashboard");
+
       setAuthorised(true);
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, role, created_at")
+        .select("*")
         .order("created_at", { ascending: false });
+
+      if (error) console.error(error);
+
       setUsers(data || []);
     };
+
     load();
   }, [router]);
 
   const inviteUser = async () => {
     setLoading(true);
+
     const res = await fetch("/api/admin/invite-user", {
       method: "POST",
       body: JSON.stringify({ email, fullName }),
     });
+
     setLoading(false);
 
-    if (!res.ok) return alert("Failed to invite user");
+    if (!res.ok) {
+      alert("Failed to invite user");
+      return;
+    }
 
     alert("User invited successfully");
     setEmail("");
     setFullName("");
   };
 
-  if (!authorised) {
-    return (
-      <div className="p-8">
-        Checking access…
-      </div>
-    );
-  }
+  if (!authorised)
+    return <div className="p-8">Checking access…</div>;
 
   return (
     <main className="p-8 space-y-6">
       <h1 className="text-2xl font-semibold">Manage Users</h1>
 
+      {/* Invite User */}
       <section className="space-y-3 border rounded p-4 bg-gray-50">
         <h2 className="font-medium">Invite New User</h2>
 
@@ -83,8 +94,10 @@ export default function AdminUsersPage() {
         </button>
       </section>
 
+      {/* Users list */}
       <section>
         <h2 className="font-medium mb-2">Existing Users</h2>
+
         <table className="min-w-full border">
           <thead className="bg-gray-100">
             <tr>
