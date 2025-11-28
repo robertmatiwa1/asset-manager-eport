@@ -1,86 +1,103 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AdminGuard from "@/components/AdminGuard";
 import { supabase } from "@/lib/supabaseClient";
+import { getCurrentUserAndRole } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+
+type Category = {
+  id: string;
+  name: string;
+  created_at: string;
+};
 
 export default function AdminCategoriesPage() {
-  const [categories, setCategories] = useState([]);
+  const router = useRouter();
+
+  const [authorized, setAuthorized] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [name, setName] = useState("");
 
   useEffect(() => {
-    load();
+    const init = async () => {
+      const { user, role } = await getCurrentUserAndRole();
+      if (!user) return router.replace("/login");
+      if (role !== "ADMIN") return router.replace("/user/dashboard");
+
+      setAuthorized(true);
+      loadCategories();
+    };
+
+    init();
   }, []);
 
-  const load = async () => {
-    const { data } = await supabase
+  const loadCategories = async () => {
+    const { data, error } = await supabase
       .from("categories")
       .select("*")
       .order("created_at", { ascending: false });
-    setCategories(data || []);
+
+    if (error) console.error(error);
+
+    setCategories((data as Category[]) || []);
   };
 
   const addCategory = async () => {
-    if (!name.trim()) return alert("Enter a category name");
+    if (!name.trim()) return alert("Enter category name");
 
-    const { error } = await supabase.from("categories").insert([{ name }]);
+    const { error } = await supabase
+      .from("categories")
+      .insert([{ name }]);
 
-    if (error) return alert("Error creating category");
+    if (error) return alert(error.message);
 
     setName("");
-    load();
+    loadCategories();
   };
 
   const deleteCategory = async (id: string) => {
     await supabase.from("categories").delete().eq("id", id);
-    load();
+    loadCategories();
   };
 
-  return (
-    <AdminGuard>
-      <main className="p-8 space-y-8">
-        <h1 className="text-2xl font-semibold">Categories</h1>
+  if (!authorized) return <div className="p-6">Checking access...</div>;
 
-        <div className="bg-white p-6 shadow rounded space-y-4">
-          <input
-            className="border p-2 rounded w-full"
-            placeholder="Category name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+  return (
+    <main className="p-8 space-y-6">
+      <h1 className="text-3xl font-semibold">Manage Categories</h1>
+
+      <div className="bg-white p-4 shadow rounded space-y-3">
+        <h2 className="font-semibold">Add New Category</h2>
+        <input
+          className="border p-2 rounded w-full"
+          placeholder="Category name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <button
+          onClick={addCategory}
+          className="bg-black text-white px-4 py-2 rounded"
+        >
+          Add Category
+        </button>
+      </div>
+
+      <h2 className="text-xl font-semibold">Existing Categories</h2>
+      {categories.map((c) => (
+        <div key={c.id} className="bg-white p-4 shadow rounded flex justify-between">
+          <div>
+            <div className="font-semibold">{c.name}</div>
+            <div className="text-gray-600 text-sm">{c.created_at}</div>
+          </div>
 
           <button
-            className="bg-black text-white px-4 py-2 rounded"
-            onClick={addCategory}
+            onClick={() => deleteCategory(c.id)}
+            className="text-red-600 hover:underline"
           >
-            Add Category
+            Delete
           </button>
         </div>
-
-        <table className="min-w-full border">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-3 py-2 border">Name</th>
-              <th className="px-3 py-2 border">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {categories.map((c: any) => (
-              <tr key={c.id}>
-                <td className="px-3 py-2 border">{c.name}</td>
-                <td className="px-3 py-2 border">
-                  <button
-                    className="text-red-500"
-                    onClick={() => deleteCategory(c.id)}
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </main>
-    </AdminGuard>
+      ))}
+    </main>
   );
 }
