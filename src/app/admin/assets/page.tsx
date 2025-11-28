@@ -1,30 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getCurrentUserAndRole } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { getCurrentUserAndRole } from "@/lib/auth";
-
-type Asset = {
-  id: string;
-  name: string;
-  cost: number;
-  date_purchased: string;
-  created_at: string;
-
-  categories: { name: string } | null;
-  departments: { name: string } | null;
-  profiles: { full_name: string } | null;
-};
 
 export default function AdminAssetsPage() {
   const router = useRouter();
-  const [authorised, setAuthorised] = useState(false);
-  const [assets, setAssets] = useState<Asset[]>([]);
 
-  // ----------------------------
-  // Ensure the user is an Admin
-  // ----------------------------
+  const [authorised, setAuthorised] = useState(false);
+  const [assets, setAssets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // -----------------------------------------------------
+  // ROLE GUARD + LOAD ALL ASSETS
+  // -----------------------------------------------------
   useEffect(() => {
     const init = async () => {
       const { user, role } = await getCurrentUserAndRole();
@@ -33,105 +23,106 @@ export default function AdminAssetsPage() {
       if (role !== "ADMIN") return router.replace("/user/dashboard");
 
       setAuthorised(true);
-      await loadAssets();
+      loadAssets();
     };
 
     init();
   }, [router]);
 
-  // ----------------------------
-  // Load all assets with joins
-  // ----------------------------
+  // Load all assets
   const loadAssets = async () => {
     const { data } = await supabase
       .from("assets")
-      .select(
-        `
+      .select(`
         id,
         name,
         cost,
         date_purchased,
-        created_at,
-        categories(name),
-        departments(name),
-        profiles(full_name)
-      `
-      )
-      .order("created_at", { ascending: false });
+        profiles (full_name),
+        categories (name),
+        departments (name)
+      `);
 
-    setAssets((data as Asset[]) || []);
+    setAssets(data || []);
   };
 
-  // ----------------------------
-  // Delete an asset
-  // ----------------------------
-  const handleDelete = async (id: string) => {
+  // -----------------------------------------------------
+  // DELETE ASSET
+  // -----------------------------------------------------
+  const deleteAsset = async (id: string) => {
     if (!confirm("Are you sure you want to delete this asset?")) return;
+
+    setLoading(true);
 
     const { error } = await supabase.from("assets").delete().eq("id", id);
 
-    if (error) {
-      alert("Could not delete asset.");
-      return;
-    }
+    setLoading(false);
 
-    await loadAssets();
+    if (error) return alert("Could not delete asset.");
+
+    loadAssets();
   };
 
-  if (!authorised) return <div className="p-8">Checking access…</div>;
+  // -----------------------------------------------------
+  // LOADING CHECK
+  // -----------------------------------------------------
+  if (!authorised) {
+    return <div className="p-8">Checking access…</div>;
+  }
 
   return (
-    <main className="p-8 space-y-6">
-      <h1 className="text-2xl font-semibold">Manage Assets</h1>
-      <p className="text-gray-600 text-sm">
-        View and manage all assets created by all users.
-      </p>
+    <main className="p-8 space-y-8">
+      <h1 className="text-3xl font-semibold">All Assets</h1>
 
-      <table className="min-w-full border rounded mt-6">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="border px-3 py-2 text-left">Name</th>
-            <th className="border px-3 py-2 text-left">Category</th>
-            <th className="border px-3 py-2 text-left">Department</th>
-            <th className="border px-3 py-2 text-left">Cost</th>
-            <th className="border px-3 py-2 text-left">Purchased</th>
-            <th className="border px-3 py-2 text-left">Created By</th>
-            <th className="border px-3 py-2 text-center">Actions</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {assets.map((a) => (
-            <tr key={a.id}>
-              <td className="border px-3 py-2">{a.name}</td>
-              <td className="border px-3 py-2">{a.categories?.name}</td>
-              <td className="border px-3 py-2">{a.departments?.name}</td>
-              <td className="border px-3 py-2">R {a.cost.toFixed(2)}</td>
-              <td className="border px-3 py-2">
-                {new Date(a.date_purchased).toLocaleDateString()}
-              </td>
-              <td className="border px-3 py-2">{a.profiles?.full_name}</td>
-
-              <td className="border px-3 py-2 text-center">
-                <button
-                  className="text-red-600 hover:underline"
-                  onClick={() => handleDelete(a.id)}
-                >
-                  Delete
-                </button>
-              </td>
-            </tr>
-          ))}
-
-          {assets.length === 0 && (
+      {/* Asset List */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full border">
+          <thead className="bg-gray-100">
             <tr>
-              <td className="border px-3 py-2 text-center" colSpan={7}>
-                No assets found.
-              </td>
+              <th className="px-4 py-2 border">Name</th>
+              <th className="px-4 py-2 border">Category</th>
+              <th className="px-4 py-2 border">Department</th>
+              <th className="px-4 py-2 border">Cost</th>
+              <th className="px-4 py-2 border">Purchased</th>
+              <th className="px-4 py-2 border">Created By</th>
+              <th className="px-4 py-2 border">Actions</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody>
+            {assets.map((a) => (
+              <tr key={a.id} className="hover:bg-gray-50">
+                <td className="px-4 py-2 border">{a.name}</td>
+                <td className="px-4 py-2 border">{a.categories?.name}</td>
+                <td className="px-4 py-2 border">{a.departments?.name}</td>
+                <td className="px-4 py-2 border">R {a.cost}</td>
+                <td className="px-4 py-2 border">
+                  {new Date(a.date_purchased).toLocaleDateString()}
+                </td>
+                <td className="px-4 py-2 border">{a.profiles?.full_name}</td>
+
+                <td className="px-4 py-2 border">
+                  <button
+                    className="text-red-600 hover:underline"
+                    disabled={loading}
+                    onClick={() => deleteAsset(a.id)}
+                  >
+                    {loading ? "Deleting…" : "Delete"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+
+            {assets.length === 0 && (
+              <tr>
+                <td className="px-4 py-4 border text-center" colSpan={7}>
+                  No assets found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </main>
   );
 }
