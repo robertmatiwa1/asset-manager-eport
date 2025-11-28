@@ -2,28 +2,31 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation";
 import { getCurrentUserAndRole } from "@/lib/auth";
-
-type Asset = {
-  id: string;
-  name: string;
-  cost: number;
-  date_purchased: string;
-  created_at: string;
-  categories: { name: string } | null;
-  departments: { name: string } | null;
-};
+import { useRouter } from "next/navigation";
 
 export default function UserAssetsPage() {
   const router = useRouter();
-  const [authorised, setAuthorised] = useState(false);
-  const [assets, setAssets] = useState<Asset[]>([]);
+
+  const [authorized, setAuthorized] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // ----------------------------------------
-  // Ensure USER role and fetch assets
-  // ----------------------------------------
+  const [assets, setAssets] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [form, setForm] = useState({
+    name: "",
+    category_id: "",
+    department_id: "",
+    date_purchased: "",
+    cost: "",
+  });
+
+  // ----------------------------
+  // Initialization
+  // ----------------------------
   useEffect(() => {
     const init = async () => {
       const { user, role } = await getCurrentUserAndRole();
@@ -31,85 +34,174 @@ export default function UserAssetsPage() {
       if (!user) return router.replace("/login");
       if (role !== "USER") return router.replace("/admin/dashboard");
 
-      setAuthorised(true);
       setUserId(user.id);
-      await loadAssets(user.id);
+      setAuthorized(true);
+
+      loadCategories();
+      loadDepartments();
+      loadAssets(user.id);
     };
 
     init();
-  }, [router]);
+  }, []);
 
-  // ----------------------------------------
-  // Load assets belonging ONLY to this user
-  // ----------------------------------------
-  const loadAssets = async (id: string) => {
-    const { data } = await supabase
-      .from("assets")
-      .select(
-        `
-        id,
-        name,
-        cost,
-        date_purchased,
-        created_at,
-        categories(name),
-        departments(name)
-      `
-      )
-      .eq("created_by", id)
-      .order("created_at", { ascending: false });
-
-    setAssets((data as Asset[]) || []);
+  // ----------------------------
+  // Load dropdown data
+  // ----------------------------
+  const loadCategories = async () => {
+    const { data } = await supabase.from("categories").select("id, name");
+    setCategories(data || []);
   };
 
-  if (!authorised) return <div className="p-8">Loading…</div>;
+  const loadDepartments = async () => {
+    const { data } = await supabase.from("departments").select("id, name");
+    setDepartments(data || []);
+  };
+
+  // ----------------------------
+  // Load user assets
+  // ----------------------------
+  const loadAssets = async (uid: string) => {
+    const { data } = await supabase
+      .from("assets")
+      .select("id, name, cost, date_purchased, categories(name), departments(name)")
+      .eq("created_by", uid);
+
+    setAssets(data || []);
+  };
+
+  // ----------------------------
+  // Create new asset
+  // ----------------------------
+  const createAsset = async () => {
+    if (!userId) return;
+
+    setLoading(true);
+
+    const { error } = await supabase.from("assets").insert([
+      {
+        name: form.name,
+        category_id: form.category_id,
+        department_id: form.department_id,
+        date_purchased: form.date_purchased,
+        cost: form.cost,
+        created_by: userId,
+      },
+    ]);
+
+    setLoading(false);
+
+    if (error) {
+      alert("Error creating asset: " + error.message);
+      return;
+    }
+
+    setForm({
+      name: "",
+      category_id: "",
+      department_id: "",
+      date_purchased: "",
+      cost: "",
+    });
+
+    loadAssets(userId);
+  };
+
+  if (!authorized) return <div className="p-6">Loading...</div>;
 
   return (
-    <main className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">My Assets</h1>
+    <main className="p-8 space-y-8">
+      <h1 className="text-2xl font-semibold">Your Assets</h1>
+
+      {/* Create new asset card */}
+      <div className="bg-white p-6 shadow rounded space-y-4">
+        <h2 className="text-xl font-semibold">Add New Asset</h2>
+
+        {/* Name */}
+        <input
+          type="text"
+          className="border p-2 rounded w-full"
+          placeholder="Asset Name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
+
+        {/* Category */}
+        <select
+          className="border p-2 rounded w-full"
+          value={form.category_id}
+          onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+        >
+          <option value="">Select Category</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+
+        {/* Department */}
+        <select
+          className="border p-2 rounded w-full"
+          value={form.department_id}
+          onChange={(e) => setForm({ ...form, department_id: e.target.value })}
+        >
+          <option value="">Select Department</option>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+
+        {/* Date purchased */}
+        <input
+          type="date"
+          className="border p-2 rounded w-full"
+          value={form.date_purchased}
+          onChange={(e) => setForm({ ...form, date_purchased: e.target.value })}
+        />
+
+        {/* Cost */}
+        <input
+          type="number"
+          className="border p-2 rounded w-full"
+          placeholder="Cost"
+          value={form.cost}
+          onChange={(e) => setForm({ ...form, cost: e.target.value })}
+        />
 
         <button
-          onClick={() => router.push("/user/assets/new")}
+          onClick={createAsset}
+          disabled={loading}
           className="bg-black text-white px-4 py-2 rounded"
         >
-          + Add Asset
+          {loading ? "Saving..." : "Add Asset"}
         </button>
       </div>
 
-      <table className="min-w-full border rounded">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="border px-3 py-2 text-left">Name</th>
-            <th className="border px-3 py-2 text-left">Category</th>
-            <th className="border px-3 py-2 text-left">Department</th>
-            <th className="border px-3 py-2 text-left">Cost</th>
-            <th className="border px-3 py-2 text-left">Purchased</th>
-          </tr>
-        </thead>
+      {/* Asset list */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Your Asset List</h2>
 
-        <tbody>
-          {assets.map((a) => (
-            <tr key={a.id}>
-              <td className="border px-3 py-2">{a.name}</td>
-              <td className="border px-3 py-2">{a.categories?.name}</td>
-              <td className="border px-3 py-2">{a.departments?.name}</td>
-              <td className="border px-3 py-2">R {a.cost.toFixed(2)}</td>
-              <td className="border px-3 py-2">
-                {new Date(a.date_purchased).toLocaleDateString()}
-              </td>
-            </tr>
-          ))}
+        {assets.length === 0 && <p>No assets created yet.</p>}
 
-          {assets.length === 0 && (
-            <tr>
-              <td className="border px-3 py-2 text-center" colSpan={5}>
-                You have not created any assets yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+        {assets.map((asset) => (
+          <div
+            key={asset.id}
+            className="bg-white p-4 shadow rounded flex justify-between"
+          >
+            <div>
+              <div className="font-semibold">{asset.name}</div>
+              <div className="text-sm text-gray-600">
+                {asset.categories?.name} — {asset.departments?.name}
+              </div>
+              <div className="text-sm">
+                Purchased: {asset.date_purchased}
+              </div>
+              <div className="text-sm font-semibold">
+                Cost: R {asset.cost}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </main>
   );
 }
