@@ -15,7 +15,10 @@ export default function AdminCategoriesPage() {
   const router = useRouter();
 
   const [authorized, setAuthorized] = useState(false);
+
+  // IMPORTANT FIX — add <Category[]>
   const [categories, setCategories] = useState<Category[]>([]);
+
   const [name, setName] = useState("");
 
   useEffect(() => {
@@ -39,15 +42,14 @@ export default function AdminCategoriesPage() {
 
     if (error) console.error(error);
 
+    // IMPORTANT: Cast the data to Category[] before setting
     setCategories((data as Category[]) || []);
   };
 
   const addCategory = async () => {
-    if (!name.trim()) return alert("Enter category name");
+    if (!name.trim()) return alert("Enter a category name");
 
-    const { error } = await supabase
-      .from("categories")
-      .insert([{ name }]);
+    const { error } = await supabase.from("categories").insert([{ name }]);
 
     if (error) return alert(error.message);
 
@@ -66,14 +68,17 @@ export default function AdminCategoriesPage() {
     <main className="p-8 space-y-6">
       <h1 className="text-3xl font-semibold">Manage Categories</h1>
 
+      {/* Add Category */}
       <div className="bg-white p-4 shadow rounded space-y-3">
         <h2 className="font-semibold">Add New Category</h2>
+
         <input
           className="border p-2 rounded w-full"
           placeholder="Category name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
+
         <button
           onClick={addCategory}
           className="bg-black text-white px-4 py-2 rounded"
@@ -82,22 +87,27 @@ export default function AdminCategoriesPage() {
         </button>
       </div>
 
-      <h2 className="text-xl font-semibold">Existing Categories</h2>
-      {categories.map((c) => (
-        <div key={c.id} className="bg-white p-4 shadow rounded flex justify-between">
-          <div>
-            <div className="font-semibold">{c.name}</div>
-            <div className="text-gray-600 text-sm">{c.created_at}</div>
-          </div>
-
-          <button
-            onClick={() => deleteCategory(c.id)}
-            className="text-red-600 hover:underline"
+      {/* List Categories */}
+      <div className="space-y-3">
+        {categories.map((c) => (
+          <div
+            key={c.id}
+            className="bg-white p-4 shadow rounded flex justify-between"
           >
-            Delete
-          </button>
-        </div>
-      ))}
+            <div>
+              <div className="font-semibold">{c.name}</div>
+              <div className="text-gray-600 text-sm">{c.created_at}</div>
+            </div>
+
+            <button
+              onClick={() => deleteCategory(c.id)}
+              className="text-red-600 hover:underline"
+            >
+              Delete
+            </button>
+          </div>
+        ))}
+      </div>
     </main>
   );
 }
