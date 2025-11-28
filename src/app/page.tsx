@@ -1,13 +1,18 @@
-// src/app/page.tsx
-export default function HomePage() {
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function Home() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/login");
+  }, [router]);
+
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-semibold">Asset Manager</h1>
-        <p className="text-gray-600">
-          Landing page placeholder, login and dashboards coming next.
-        </p>
-      </div>
-    </main>
+    <div className="p-8 text-center text-gray-500">
+      Redirecting…
+    </div>
   );
 }
