@@ -13,12 +13,10 @@ type Category = {
 
 export default function AdminCategoriesPage() {
   const router = useRouter();
-
   const [authorized, setAuthorized] = useState(false);
-
-  // IMPORTANT FIX — add <Category[]>
+  
+  // FIX: Explicitly type the useState hook
   const [categories, setCategories] = useState<Category[]>([]);
-
   const [name, setName] = useState("");
 
   useEffect(() => {
@@ -32,7 +30,7 @@ export default function AdminCategoriesPage() {
     };
 
     init();
-  }, []);
+  }, [router]);
 
   const loadCategories = async () => {
     const { data, error } = await supabase
@@ -40,10 +38,13 @@ export default function AdminCategoriesPage() {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) console.error(error);
+    if (error) {
+      console.error("Error loading categories:", error);
+      return;
+    }
 
-    // IMPORTANT: Cast the data to Category[] before setting
-    setCategories((data as Category[]) || []);
+    // FIX: This should now work without type errors
+    setCategories(data || []);
   };
 
   const addCategory = async () => {
@@ -51,14 +52,23 @@ export default function AdminCategoriesPage() {
 
     const { error } = await supabase.from("categories").insert([{ name }]);
 
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
     setName("");
     loadCategories();
   };
 
   const deleteCategory = async (id: string) => {
-    await supabase.from("categories").delete().eq("id", id);
+    const { error } = await supabase.from("categories").delete().eq("id", id);
+    
+    if (error) {
+      console.error("Error deleting category:", error);
+      return;
+    }
+    
     loadCategories();
   };
 
@@ -81,7 +91,7 @@ export default function AdminCategoriesPage() {
 
         <button
           onClick={addCategory}
-          className="bg-black text-white px-4 py-2 rounded"
+          className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors"
         >
           Add Category
         </button>
@@ -92,21 +102,33 @@ export default function AdminCategoriesPage() {
         {categories.map((c) => (
           <div
             key={c.id}
-            className="bg-white p-4 shadow rounded flex justify-between"
+            className="bg-white p-4 shadow rounded flex justify-between items-center"
           >
             <div>
               <div className="font-semibold">{c.name}</div>
-              <div className="text-gray-600 text-sm">{c.created_at}</div>
+              <div className="text-gray-600 text-sm">
+                {new Date(c.created_at).toLocaleDateString()}
+              </div>
             </div>
 
             <button
-              onClick={() => deleteCategory(c.id)}
-              className="text-red-600 hover:underline"
+              onClick={() => {
+                if (confirm(`Are you sure you want to delete "${c.name}"?`)) {
+                  deleteCategory(c.id);
+                }
+              }}
+              className="text-red-600 hover:text-red-800 hover:underline transition-colors"
             >
               Delete
             </button>
           </div>
         ))}
+        
+        {categories.length === 0 && (
+          <div className="text-center text-gray-500 py-8">
+            No categories found. Add your first category above.
+          </div>
+        )}
       </div>
     </main>
   );
