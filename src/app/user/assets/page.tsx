@@ -4,19 +4,19 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentUserAndRole } from "@/lib/auth";
 import { useRouter } from "next/navigation";
-import FullScreenLoader from "@/components/FullScreenLoader";
-import Spinner from "@/components/Spinner";
 
 export default function UserAssetsPage() {
   const router = useRouter();
 
   const [authorized, setAuthorized] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  const [userId, setUserId] = useState<string | null>(null);
   const [assets, setAssets] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -33,24 +33,24 @@ export default function UserAssetsPage() {
       if (!user) return router.replace("/login");
       if (role !== "USER") return router.replace("/admin/dashboard");
 
-      setUserId(user.id);
       setAuthorized(true);
+      setUserId(user.id);
 
-      loadCategories();
-      loadDepartments();
-      loadAssets(user.id);
+      Promise.all([loadCategories(), loadDepartments(), loadAssets(user.id)]).then(
+        () => setLoading(false)
+      );
     };
 
     init();
   }, []);
 
   const loadCategories = async () => {
-    const { data } = await supabase.from("categories").select("*");
+    const { data } = await supabase.from("categories").select("id, name");
     setCategories(data || []);
   };
 
   const loadDepartments = async () => {
-    const { data } = await supabase.from("departments").select("*");
+    const { data } = await supabase.from("departments").select("id, name");
     setDepartments(data || []);
   };
 
@@ -59,14 +59,13 @@ export default function UserAssetsPage() {
       .from("assets")
       .select("id, name, cost, date_purchased, categories(name), departments(name)")
       .eq("created_by", uid);
-
     setAssets(data || []);
   };
 
   const createAsset = async () => {
     if (!userId) return;
 
-    setLoading(true);
+    setSaving(true);
 
     const { error } = await supabase.from("assets").insert([
       {
@@ -79,9 +78,9 @@ export default function UserAssetsPage() {
       },
     ]);
 
-    setLoading(false);
+    setSaving(false);
 
-    if (error) return alert(error.message);
+    if (error) return alert("Error creating asset: " + error.message);
 
     setForm({
       name: "",
@@ -94,51 +93,74 @@ export default function UserAssetsPage() {
     loadAssets(userId);
   };
 
-  if (!authorized) return <FullScreenLoader />;
+  if (!authorized) return <div className="p-8">Checking access...</div>;
 
   return (
     <main className="p-8 space-y-8">
       <h1 className="text-2xl font-semibold">Your Assets</h1>
 
+      {/* NEW ASSET FORM */}
       <div className="bg-white p-6 shadow rounded space-y-4">
         <h2 className="text-xl font-semibold">Add New Asset</h2>
 
+        {/* NAME */}
         <input
+          type="text"
           className="border p-2 rounded w-full"
           placeholder="Asset Name"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
 
+        {/* CATEGORY */}
         <select
           className="border p-2 rounded w-full"
           value={form.category_id}
           onChange={(e) => setForm({ ...form, category_id: e.target.value })}
         >
           <option value="">Select Category</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
+
+          {loading ? (
+            <option>Loading...</option>
+          ) : (
+            categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))
+          )}
         </select>
 
+        {/* DEPARTMENT */}
         <select
           className="border p-2 rounded w-full"
           value={form.department_id}
           onChange={(e) => setForm({ ...form, department_id: e.target.value })}
         >
           <option value="">Select Department</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
+
+          {loading ? (
+            <option>Loading...</option>
+          ) : (
+            departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))
+          )}
         </select>
 
+        {/* DATE */}
         <input
           type="date"
           className="border p-2 rounded w-full"
           value={form.date_purchased}
-          onChange={(e) => setForm({ ...form, date_purchased: e.target.value })}
+          onChange={(e) =>
+            setForm({ ...form, date_purchased: e.target.value })
+          }
         />
 
+        {/* COST */}
         <input
           type="number"
           className="border p-2 rounded w-full"
@@ -149,38 +171,41 @@ export default function UserAssetsPage() {
 
         <button
           onClick={createAsset}
-          disabled={loading}
-          className="bg-black text-white px-4 py-2 rounded flex items-center gap-2"
+          disabled={saving}
+          className="bg-black text-white px-4 py-2 rounded"
         >
-          {loading && <Spinner />}
-          {loading ? "Saving..." : "Add Asset"}
+          {saving ? "Saving..." : "Add Asset"}
         </button>
       </div>
 
+      {/* ASSET LIST */}
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Your Asset List</h2>
 
-        {assets.length === 0 && <p>No assets created yet.</p>}
-
-        {assets.map((asset) => (
-          <div
-            key={asset.id}
-            className="bg-white p-4 shadow rounded flex justify-between"
-          >
-            <div>
-              <div className="font-semibold">{asset.name}</div>
-              <div className="text-gray-600 text-sm">
-                {asset.categories?.name} — {asset.departments?.name}
-              </div>
-              <div className="text-sm">
-                Purchased: {asset.date_purchased}
-              </div>
-              <div className="text-sm font-semibold">
-                Cost: R {asset.cost}
+        {loading ? (
+          <>
+            <div className="bg-white p-4 shadow rounded animate-pulse h-20"></div>
+            <div className="bg-white p-4 shadow rounded animate-pulse h-20"></div>
+          </>
+        ) : assets.length === 0 ? (
+          <p>No assets created yet.</p>
+        ) : (
+          assets.map((asset) => (
+            <div
+              key={asset.id}
+              className="bg-white p-4 shadow rounded flex justify-between"
+            >
+              <div>
+                <div className="font-semibold">{asset.name}</div>
+                <div className="text-sm text-gray-600">
+                  {asset.categories?.name} — {asset.departments?.name}
+                </div>
+                <div className="text-sm">Purchased: {asset.date_purchased}</div>
+                <div className="text-sm font-semibold">Cost: R {asset.cost}</div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </main>
   );
