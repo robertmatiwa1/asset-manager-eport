@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentUserAndRole } from "@/lib/auth";
 import { useRouter } from "next/navigation";
+import AdminLoader from "@/components/AdminLoader";
 
 type Category = {
   id: string;
@@ -15,12 +16,11 @@ export default function AdminCategoriesPage() {
   const router = useRouter();
 
   const [authorized, setAuthorized] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [name, setName] = useState("");
 
-  // ---------------------------
-  // Load Categories 
-  // ---------------------------
   const loadCategories = async () => {
     const { data, error } = await supabase
       .from("categories")
@@ -28,14 +28,9 @@ export default function AdminCategoriesPage() {
       .order("created_at", { ascending: false });
 
     if (error) console.error(error);
-
-    // FIXES VERCEL BUILDS
-    setCategories((data as unknown as Category[]) || []);
+    setCategories((data as Category[]) || []);
   };
 
-  // ---------------------------
-  // Init + Auth Guard
-  // ---------------------------
   useEffect(() => {
     const init = async () => {
       const { user, role } = await getCurrentUserAndRole();
@@ -44,35 +39,14 @@ export default function AdminCategoriesPage() {
       if (role !== "ADMIN") return router.replace("/user/dashboard");
 
       setAuthorized(true);
-      loadCategories(); // now SAFE
+      await loadCategories();
+      setLoading(false);
     };
 
     init();
   }, []);
 
-  // ---------------------------
-  // Add a category
-  // ---------------------------
-  const addCategory = async () => {
-    if (!name.trim()) return alert("Enter a category name");
-
-    const { error } = await supabase.from("categories").insert([{ name }]);
-
-    if (error) return alert(error.message);
-
-    setName("");
-    loadCategories();
-  };
-
-  // ---------------------------
-  // Delete category
-  // ---------------------------
-  const deleteCategory = async (id: string) => {
-    await supabase.from("categories").delete().eq("id", id);
-    loadCategories();
-  };
-
-  if (!authorized) return <div className="p-6">Checking access...</div>;
+  if (!authorized || loading) return <AdminLoader />;
 
   return (
     <main className="p-8 space-y-6">
@@ -89,7 +63,12 @@ export default function AdminCategoriesPage() {
         />
 
         <button
-          onClick={addCategory}
+          onClick={async () => {
+            if (!name) return alert("Enter category name");
+            await supabase.from("categories").insert([{ name }]);
+            setName("");
+            loadCategories();
+          }}
           className="bg-black text-white px-4 py-2 rounded"
         >
           Add Category
@@ -108,7 +87,10 @@ export default function AdminCategoriesPage() {
             </div>
 
             <button
-              onClick={() => deleteCategory(c.id)}
+              onClick={() => {
+                supabase.from("categories").delete().eq("id", c.id);
+                loadCategories();
+              }}
               className="text-red-600 hover:underline"
             >
               Delete

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentUserAndRole } from "@/lib/auth";
 import { useRouter } from "next/navigation";
+import AdminLoader from "@/components/AdminLoader";
 
 type Department = {
   id: string;
@@ -15,12 +16,11 @@ export default function AdminDepartmentsPage() {
   const router = useRouter();
 
   const [authorized, setAuthorized] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const [departments, setDepartments] = useState<Department[]>([]);
   const [name, setName] = useState("");
 
-  // ---------------------------------
-  // Load Departments BEFORE useEffect
-  // ---------------------------------
   const loadDepartments = async () => {
     const { data, error } = await supabase
       .from("departments")
@@ -28,9 +28,7 @@ export default function AdminDepartmentsPage() {
       .order("created_at", { ascending: false });
 
     if (error) console.error(error);
-
-    // FIX FOR VERCEL
-    setDepartments((data as unknown as Department[]) || []);
+    setDepartments((data as Department[]) || []);
   };
 
   useEffect(() => {
@@ -41,35 +39,19 @@ export default function AdminDepartmentsPage() {
       if (role !== "ADMIN") return router.replace("/user/dashboard");
 
       setAuthorized(true);
-      loadDepartments(); // SAFE NOW
+      await loadDepartments();
+      setLoading(false);
     };
 
     init();
   }, []);
 
-  const addDepartment = async () => {
-    if (!name.trim()) return alert("Enter a department name");
-
-    const { error } = await supabase.from("departments").insert([{ name }]);
-
-    if (error) return alert(error.message);
-
-    setName("");
-    loadDepartments();
-  };
-
-  const deleteDepartment = async (id: string) => {
-    await supabase.from("departments").delete().eq("id", id);
-    loadDepartments();
-  };
-
-  if (!authorized) return <div className="p-6">Checking access...</div>;
+  if (!authorized || loading) return <AdminLoader />;
 
   return (
     <main className="p-8 space-y-6">
       <h1 className="text-3xl font-semibold">Manage Departments</h1>
 
-      {/* Add Department */}
       <div className="bg-white p-4 shadow rounded space-y-3">
         <h2 className="font-semibold">Add New Department</h2>
 
@@ -81,14 +63,18 @@ export default function AdminDepartmentsPage() {
         />
 
         <button
-          onClick={addDepartment}
+          onClick={async () => {
+            if (!name) return alert("Enter department name");
+            await supabase.from("departments").insert([{ name }]);
+            setName("");
+            loadDepartments();
+          }}
           className="bg-black text-white px-4 py-2 rounded"
         >
           Add Department
         </button>
       </div>
 
-      {/* List Departments */}
       <div className="space-y-3">
         {departments.map((d) => (
           <div
@@ -101,7 +87,10 @@ export default function AdminDepartmentsPage() {
             </div>
 
             <button
-              onClick={() => deleteDepartment(d.id)}
+              onClick={() => {
+                supabase.from("departments").delete().eq("id", d.id);
+                loadDepartments();
+              }}
               className="text-red-600 hover:underline"
             >
               Delete

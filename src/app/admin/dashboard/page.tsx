@@ -1,51 +1,76 @@
-import AdminGuard from "@/components/AdminGuard";
+"use client";
+
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getCurrentUserAndRole } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import AdminLoader from "@/components/AdminLoader";
 
-export default async function AdminDashboardPage() {
-  const { data: users } = await supabase.from("profiles").select("*");
-  const { data: assets } = await supabase.from("assets").select("*");
-  const { data: categories } = await supabase.from("categories").select("*");
-  const { data: departments } = await supabase.from("departments").select("*");
+export default function AdminDashboard() {
+  const router = useRouter();
 
-  const totalValue =
-    assets?.reduce((acc, asset) => acc + Number(asset.cost), 0) || 0;
+  const [authorized, setAuthorized] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const [stats, setStats] = useState({
+    totalAssets: 0,
+    totalCategories: 0,
+    totalDepartments: 0,
+    totalUsers: 0,
+  });
+
+  const loadStats = async () => {
+    const [assets, categories, departments, users] = await Promise.all([
+      supabase.from("assets").select("id"),
+      supabase.from("categories").select("id"),
+      supabase.from("departments").select("id"),
+      supabase.from("profiles").select("id"),
+    ]);
+
+    setStats({
+      totalAssets: assets.data?.length || 0,
+      totalCategories: categories.data?.length || 0,
+      totalDepartments: departments.data?.length || 0,
+      totalUsers: users.data?.length || 0,
+    });
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      const { user, role } = await getCurrentUserAndRole();
+
+      if (!user) return router.replace("/login");
+      if (role !== "ADMIN") return router.replace("/user/dashboard");
+
+      setAuthorized(true);
+      await loadStats();
+      setLoading(false);
+    };
+
+    init();
+  }, []);
+
+  if (!authorized || loading) return <AdminLoader />;
 
   return (
-    <AdminGuard>
-      <main className="p-8 space-y-8">
-        <h1 className="text-3xl font-semibold">Admin Dashboard</h1>
+    <main className="p-8 space-y-6">
+      <h1 className="text-3xl font-semibold">Admin Dashboard</h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 shadow rounded">
-            <div className="text-muted">Users</div>
-            <div className="text-3xl font-bold">{users?.length || 0}</div>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <StatCard label="Total Assets" value={stats.totalAssets} />
+        <StatCard label="Total Users" value={stats.totalUsers} />
+        <StatCard label="Categories" value={stats.totalCategories} />
+        <StatCard label="Departments" value={stats.totalDepartments} />
+      </div>
+    </main>
+  );
+}
 
-          <div className="bg-white p-6 shadow rounded">
-            <div className="text-muted">Assets</div>
-            <div className="text-3xl font-bold">{assets?.length || 0}</div>
-          </div>
-
-          <div className="bg-white p-6 shadow rounded">
-            <div className="text-muted">Categories</div>
-            <div className="text-3xl font-bold">
-              {categories?.length || 0}
-            </div>
-          </div>
-
-          <div className="bg-white p-6 shadow rounded">
-            <div className="text-muted">Departments</div>
-            <div className="text-3xl font-bold">
-              {departments?.length || 0}
-            </div>
-          </div>
-
-          <div className="bg-white p-6 shadow rounded">
-            <div className="text-muted">Total Asset Value</div>
-            <div className="text-3xl font-bold">R {totalValue.toFixed(2)}</div>
-          </div>
-        </div>
-      </main>
-    </AdminGuard>
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="p-6 bg-white shadow rounded">
+      <div className="text-gray-600 text-sm">{label}</div>
+      <div className="text-3xl font-bold mt-1">{value}</div>
+    </div>
   );
 }
