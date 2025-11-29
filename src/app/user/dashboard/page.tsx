@@ -31,8 +31,7 @@ export default function UserDashboard() {
     const { data: assets } = await supabase
       .from("assets")
       .select("id, cost")
-      .eq("user_id", userId);  // <-- FIXED HERE
-
+      .eq("user_id", userId);  
     const totalValue = assets?.reduce((acc, asset) => acc + Number(asset.cost), 0) || 0;
 
     setStats({
@@ -41,7 +40,7 @@ export default function UserDashboard() {
     });
   };
 
-  if (!authorized) return <div className="p-8">Checking access...</div>;
+  if (!authorized) return <FullScreenLoader/>;
 
   return (
     <main className="p-8 space-y-8">
