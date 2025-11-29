@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentUserAndRole } from "@/lib/auth";
 import { useRouter } from "next/navigation";
+import FullScreenLoader from "@/components/FullScreenLoader";
+import Spinner from "@/components/Spinner";
 
 export default function UserAssetsPage() {
   const router = useRouter();
@@ -24,9 +26,6 @@ export default function UserAssetsPage() {
     cost: "",
   });
 
-  // ----------------------------
-  // Initialization
-  // ----------------------------
   useEffect(() => {
     const init = async () => {
       const { user, role } = await getCurrentUserAndRole();
@@ -45,34 +44,25 @@ export default function UserAssetsPage() {
     init();
   }, []);
 
-  // ----------------------------
-  // Load dropdown data
-  // ----------------------------
   const loadCategories = async () => {
-    const { data } = await supabase.from("categories").select("id, name");
+    const { data } = await supabase.from("categories").select("*");
     setCategories(data || []);
   };
 
   const loadDepartments = async () => {
-    const { data } = await supabase.from("departments").select("id, name");
+    const { data } = await supabase.from("departments").select("*");
     setDepartments(data || []);
   };
 
-  // ----------------------------
-  // Load user assets
-  // ----------------------------
   const loadAssets = async (uid: string) => {
     const { data } = await supabase
       .from("assets")
       .select("id, name, cost, date_purchased, categories(name), departments(name)")
-      .eq("user_id", uid);  // <-- FIXED HERE
+      .eq("created_by", uid);
 
     setAssets(data || []);
   };
 
-  // ----------------------------
-  // Create new asset
-  // ----------------------------
   const createAsset = async () => {
     if (!userId) return;
 
@@ -85,16 +75,13 @@ export default function UserAssetsPage() {
         department_id: form.department_id,
         date_purchased: form.date_purchased,
         cost: form.cost,
-        user_id: userId,   // <-- FIXED HERE
+        created_by: userId,
       },
     ]);
 
     setLoading(false);
 
-    if (error) {
-      alert("Error creating asset: " + error.message);
-      return;
-    }
+    if (error) return alert(error.message);
 
     setForm({
       name: "",
@@ -107,26 +94,22 @@ export default function UserAssetsPage() {
     loadAssets(userId);
   };
 
-  if (!authorized) return <div className="p-6">Loading...</div>;
+  if (!authorized) return <FullScreenLoader />;
 
   return (
     <main className="p-8 space-y-8">
       <h1 className="text-2xl font-semibold">Your Assets</h1>
 
-      {/* Create new asset card */}
       <div className="bg-white p-6 shadow rounded space-y-4">
         <h2 className="text-xl font-semibold">Add New Asset</h2>
 
-        {/* Name */}
         <input
-          type="text"
           className="border p-2 rounded w-full"
           placeholder="Asset Name"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
 
-        {/* Category */}
         <select
           className="border p-2 rounded w-full"
           value={form.category_id}
@@ -138,7 +121,6 @@ export default function UserAssetsPage() {
           ))}
         </select>
 
-        {/* Department */}
         <select
           className="border p-2 rounded w-full"
           value={form.department_id}
@@ -150,7 +132,6 @@ export default function UserAssetsPage() {
           ))}
         </select>
 
-        {/* Date purchased */}
         <input
           type="date"
           className="border p-2 rounded w-full"
@@ -158,7 +139,6 @@ export default function UserAssetsPage() {
           onChange={(e) => setForm({ ...form, date_purchased: e.target.value })}
         />
 
-        {/* Cost */}
         <input
           type="number"
           className="border p-2 rounded w-full"
@@ -170,13 +150,13 @@ export default function UserAssetsPage() {
         <button
           onClick={createAsset}
           disabled={loading}
-          className="bg-black text-white px-4 py-2 rounded"
+          className="bg-black text-white px-4 py-2 rounded flex items-center gap-2"
         >
+          {loading && <Spinner />}
           {loading ? "Saving..." : "Add Asset"}
         </button>
       </div>
 
-      {/* Asset list */}
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Your Asset List</h2>
 
@@ -189,7 +169,7 @@ export default function UserAssetsPage() {
           >
             <div>
               <div className="font-semibold">{asset.name}</div>
-              <div className="text-sm text-gray-600">
+              <div className="text-gray-600 text-sm">
                 {asset.categories?.name} — {asset.departments?.name}
               </div>
               <div className="text-sm">
