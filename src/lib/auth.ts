@@ -1,23 +1,24 @@
+"use server";
+
 import { supabase } from "./supabaseClient";
 
-// Removed: import type { UserRole } from "./types";
-
 export async function getCurrentUserAndRole() {
-  const { data: userData } = await supabase.auth.getUser();
-
-  const user = userData?.user;
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
   if (!user) return { user: null, role: null };
 
+  // Get role from profiles table
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, full_name")
+    .select("role")
     .eq("id", user.id)
     .single();
 
   return {
     user,
     role: profile?.role || null,
-    fullName: profile?.full_name || "",
   };
 }

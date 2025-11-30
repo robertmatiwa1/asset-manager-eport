@@ -5,7 +5,7 @@ import { getCurrentUserAndRole } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-export default function AdminGuard({ children }: { children: React.ReactNode }) {
+export default function UserGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
 
@@ -14,14 +14,16 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
       const { user, role } = await getCurrentUserAndRole();
 
       if (!user) return router.replace("/login");
-      if (role !== "ADMIN") return router.replace("/user/dashboard");
+
+      // Only allow Users
+      if (role !== "USER") return router.replace("/admin/dashboard");
 
       setAuthorized(true);
     };
 
     load();
 
-    // Refresh on session change
+    // Refresh when session changes (no refresh needed)
     const { data: listener } = supabase.auth.onAuthStateChange(() => load());
 
     return () => listener.subscription.unsubscribe();

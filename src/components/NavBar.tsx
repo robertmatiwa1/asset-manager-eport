@@ -9,43 +9,41 @@ export default function NavBar() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [role, setRole] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
-  // Load current user + role for nav visibility
+  // Load role + watch for auth changes
   useEffect(() => {
     const load = async () => {
-      const { user, role } = await getCurrentUserAndRole();
-
-      if (!user) {
-        setInitialized(true);
-        return; // No user logged in
-      }
-
-      setRole(role);
+      const resp = await getCurrentUserAndRole();
+      setUserRole(resp.role);
       setInitialized(true);
     };
 
     load();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      load(); // refresh role after login/logout
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
+
+  // Hide navbar on login page
+  if (pathname === "/login") return null;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setUserRole(null);
     router.replace("/login");
   };
-
-  if (!initialized) return null;
-
-  // Hide nav on login page
-  if (pathname === "/login") return null;
 
   return (
     <nav className="bg-white border-b px-6 py-3 flex items-center justify-between sticky top-0 z-50">
       <div className="font-semibold">Asset Manager</div>
 
-      {/* Dynamic links depending on user role */}
       <div className="flex gap-6 text-sm">
-        {role === "ADMIN" && (
+        {userRole === "ADMIN" && (
           <>
             <button onClick={() => router.push("/admin/dashboard")}>Dashboard</button>
             <button onClick={() => router.push("/admin/users")}>Users</button>
@@ -55,7 +53,7 @@ export default function NavBar() {
           </>
         )}
 
-        {role === "USER" && (
+        {userRole === "USER" && (
           <>
             <button onClick={() => router.push("/user/dashboard")}>My Dashboard</button>
             <button onClick={() => router.push("/user/assets")}>My Assets</button>
