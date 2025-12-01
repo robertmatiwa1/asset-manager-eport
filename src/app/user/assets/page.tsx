@@ -14,7 +14,9 @@ export default function UserAssetsPage() {
   const [assets, setAssets] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  const [loading, setLoading] = useState(true); // FIXED
+  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -24,7 +26,9 @@ export default function UserAssetsPage() {
     cost: "",
   });
 
-  // Initialization
+  // ---------------------------
+  // INITIAL PAGE LOAD
+  // ---------------------------
   useEffect(() => {
     const init = async () => {
       const { user, role } = await getCurrentUserAndRole();
@@ -33,38 +37,32 @@ export default function UserAssetsPage() {
       if (role !== "USER") return router.replace("/admin/dashboard");
 
       setUserId(user.id);
-      setAuthorized(true);
 
-      loadCategories();
-      loadDepartments();
-      loadAssets(user.id);
+      const [catRes, depRes, assetRes] = await Promise.all([
+        supabase.from("categories").select("id, name"),
+        supabase.from("departments").select("id, name"),
+        supabase
+          .from("assets")
+          .select("id, name, cost, date_purchased, categories(name), departments(name)")
+          .eq("created_by", user.id),
+      ]);
+
+      setCategories(catRes.data || []);
+      setDepartments(depRes.data || []);
+      setAssets(assetRes.data || []);
+
+      setAuthorized(true);
+      setLoading(false);
     };
 
     init();
   }, []);
 
-  const loadCategories = async () => {
-    const { data } = await supabase.from("categories").select("id, name");
-    setCategories(data || []);
-  };
-
-  const loadDepartments = async () => {
-    const { data } = await supabase.from("departments").select("id, name");
-    setDepartments(data || []);
-  };
-
-  const loadAssets = async (uid: string) => {
-    const { data } = await supabase
-      .from("assets")
-      .select("id, name, cost, date_purchased, categories(name), departments(name)")
-      .eq("created_by", uid);
-
-    setAssets(data || []);
-  };
-
-  // ⭐ FIXED createAsset()
+  // ---------------------------
+  // CREATE ASSET
+  // ---------------------------
   const createAsset = async () => {
-    setLoading(true);
+    setSaving(true);
 
     const { data: sessionData } = await supabase.auth.getUser();
     const activeUser = sessionData?.user;
@@ -82,17 +80,18 @@ export default function UserAssetsPage() {
         department_id: form.department_id,
         date_purchased: form.date_purchased,
         cost: Number(form.cost),
-        created_by: activeUser.id, // ⭐ ALWAYS correct user
+        created_by: activeUser.id,
       },
     ]);
 
-    setLoading(false);
+    setSaving(false);
 
     if (error) {
       alert("Error: " + error.message);
       return;
     }
 
+    // Clear form
     setForm({
       name: "",
       category_id: "",
@@ -101,22 +100,37 @@ export default function UserAssetsPage() {
       cost: "",
     });
 
-    loadAssets(activeUser.id);
+    // Reload assets
+    const { data } = await supabase
+      .from("assets")
+      .select("id, name, cost, date_purchased, categories(name), departments(name)")
+      .eq("created_by", activeUser.id);
+
+    setAssets(data || []);
   };
 
-  if (!authorized) return <div className="p-6">Loading...</div>;
-
-  if (categories.length === 0 || departments.length === 0) {
-    return <div className="p-6">Loading...</div>;
+  // ---------------------------
+  // UI RENDERING
+  // ---------------------------
+  if (!authorized || loading) {
+    return <div className="p-6 text-center text-gray-700">Loading your assets...</div>;
   }
 
   return (
     <main className="p-8 space-y-8">
-      <h1 className="text-2xl font-semibold">Your Assets</h1>
+      <h1 className="text-2xl font-semibold">My Assets</h1>
 
-      {/* Create new asset card */}
-      <div className="bg-white p-6 shadow rounded space-y-4">
-        <h2 className="text-xl font-semibold">Add New Asset</h2>
+      {/* CREATE ASSET FORM */}
+      <div className="bg-white p-6 rounded shadow space-y-4">
+        <h2 className="text-lg font-semibold">Add New Asset</h2>
+
+        {categories.length === 0 && (
+          <p className="text-red-600">⚠ No categories available. Admin must create some.</p>
+        )}
+
+        {departments.length === 0 && (
+          <p className="text-red-600">⚠ No departments available. Admin must create some.</p>
+        )}
 
         <input
           type="text"
@@ -165,35 +179,33 @@ export default function UserAssetsPage() {
 
         <button
           onClick={createAsset}
-          disabled={loading}
           className="bg-black text-white px-4 py-2 rounded"
+          disabled={saving}
         >
-          {loading ? "Saving..." : "Add Asset"}
+          {saving ? "Saving..." : "Add Asset"}
         </button>
       </div>
 
-      {/* Asset list */}
+      {/* ASSET LIST */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Your Asset List</h2>
+        <h2 className="text-xl font-semibold">Your Assets</h2>
 
-        {assets.length === 0 && <p>No assets created yet.</p>}
+        {assets.length === 0 && <p>You haven't created any assets yet.</p>}
 
         {assets.map((asset) => (
           <div
             key={asset.id}
-            className="bg-white p-4 shadow rounded flex justify-between"
+            className="bg-white p-4 shadow rounded border flex justify-between"
           >
             <div>
               <div className="font-semibold">{asset.name}</div>
               <div className="text-sm text-gray-600">
                 {asset.categories?.name} — {asset.departments?.name}
               </div>
-              <div className="text-sm">
+              <div className="text-sm text-gray-700">
                 Purchased: {asset.date_purchased}
               </div>
-              <div className="text-sm font-semibold">
-                Cost: R {asset.cost}
-              </div>
+              <div className="text-sm font-semibold">Cost: ${asset.cost}</div>
             </div>
           </div>
         ))}
