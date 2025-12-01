@@ -1,24 +1,20 @@
-"use server";
-
 import { supabase } from "./supabaseClient";
 
 export async function getCurrentUserAndRole() {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) return { user: null, role: null };
+  if (!user) return { user: null, role: null, profile: null };
 
-  // Get role from profiles table
+  // Load profile from table
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("*")
     .eq("id", user.id)
     .single();
 
   return {
     user,
     role: profile?.role || null,
+    profile,
   };
 }
