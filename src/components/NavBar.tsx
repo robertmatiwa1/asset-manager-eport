@@ -9,47 +9,54 @@ export default function NavBar() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
-  // Load role + watch for auth changes
+  // Load current user + role
   useEffect(() => {
     const load = async () => {
-      const resp = await getCurrentUserAndRole();
-      setUserRole(resp.role);
+      const { role } = await getCurrentUserAndRole();
+      setRole(role);
       setInitialized(true);
     };
 
     load();
 
+    // Watch for login/logout changes
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-  if (event === "SIGNED_OUT") {
-    setRole(null);
-    router.push("/login");
-    return;
-  }
-  load();
-});
-
+      if (event === "SIGNED_OUT") {
+        setRole(null);
+        router.push("/login");
+        setTimeout(() => window.location.replace("/login"), 30);
+        return;
+      }
+      load();
+    });
 
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Hide navbar on login page
-  if (pathname === "/login") return null;
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setUserRole(null);
-    router.replace("/login");
+
+    // Reset UI instantly
+    setRole(null);
+
+    router.push("/login");
+
+    // Hard refresh to kill stale session
+    setTimeout(() => window.location.replace("/login"), 30);
   };
+
+  // Hide nav on login page
+  if (pathname === "/login" || !initialized) return null;
 
   return (
     <nav className="bg-white border-b px-6 py-3 flex items-center justify-between sticky top-0 z-50">
       <div className="font-semibold">Asset Manager</div>
 
       <div className="flex gap-6 text-sm">
-        {userRole === "ADMIN" && (
+        {role === "ADMIN" && (
           <>
             <button onClick={() => router.push("/admin/dashboard")}>Dashboard</button>
             <button onClick={() => router.push("/admin/users")}>Users</button>
@@ -59,24 +66,17 @@ export default function NavBar() {
           </>
         )}
 
-        {userRole === "USER" && (
+        {role === "USER" && (
           <>
             <button onClick={() => router.push("/user/dashboard")}>My Dashboard</button>
             <button onClick={() => router.push("/user/assets")}>My Assets</button>
           </>
         )}
 
-        <button
-          onClick={handleLogout}
-          className="text-red-600 font-medium hover:underline"
-        >
+        <button onClick={handleLogout} className="text-red-600 font-medium hover:underline">
           Logout
         </button>
       </div>
     </nav>
   );
 }
-function setRole(arg0: null) {
-  throw new Error("Function not implemented.");
-}
-
