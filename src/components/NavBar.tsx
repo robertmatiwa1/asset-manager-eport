@@ -22,9 +22,15 @@ export default function NavBar() {
 
     load();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
-      load(); // refresh role after login/logout
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+  if (event === "SIGNED_OUT") {
+    setRole(null);
+    router.push("/login");
+    return;
+  }
+  load();
+});
+
 
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -70,3 +76,7 @@ export default function NavBar() {
     </nav>
   );
 }
+function setRole(arg0: null) {
+  throw new Error("Function not implemented.");
+}
+

@@ -11,7 +11,18 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     const load = async () => {
-      const { user, role } = await getCurrentUserAndRole();
+      // Always read fresh session
+const { data: sessionData } = await supabase.auth.getSession();
+const sessionUser = sessionData?.session?.user || null;
+
+// If session is gone → redirect immediately
+if (!sessionUser) {
+  router.replace("/login");
+  return;
+}
+
+const { user, role } = await getCurrentUserAndRole();
+
 
       if (!user) return router.replace("/login");
       if (role !== "ADMIN") return router.replace("/user/dashboard");
