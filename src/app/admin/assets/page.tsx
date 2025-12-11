@@ -13,15 +13,19 @@ type AdminAsset = {
   categories?: { name: string } | null;
   departments?: { name: string } | null;
   profiles?: { full_name: string } | null;
+  warrantyRegistered?: boolean;
 };
 
 export default function AdminAssetsPage() {
   const [assets, setAssets] = useState<AdminAsset[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal state
+  // Delete modal state
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Warranty registration state
+  const [registeringId, setRegisteringId] = useState<string | null>(null);
 
   const openDelete = (id: string) => {
     setSelectedId(id);
@@ -37,11 +41,6 @@ export default function AdminAssetsPage() {
     setSelectedId(null);
     loadAssets();
   };
-
-  // Load all assets
-  useEffect(() => {
-    loadAssets();
-  }, []);
 
   const loadAssets = async () => {
     setLoading(true);
@@ -59,9 +58,12 @@ export default function AdminAssetsPage() {
       `)
       .order("created_at", { ascending: false });
 
-    if (error) console.error(error);
+    if (error) {
+      console.error("Error loading assets", error);
+      setLoading(false);
+      return;
+    }
 
-    // Supabase returns nested objects (not arrays)
     const mapped = (data || []).map((a: any) => ({
       id: a.id,
       name: a.name,
@@ -70,10 +72,55 @@ export default function AdminAssetsPage() {
       categories: a.categories,
       departments: a.departments,
       profiles: a.profiles,
+      warrantyRegistered: false,
     }));
 
-    setAssets(mapped as AdminAsset[]);
+    setAssets(mapped);
     setLoading(false);
+  };
+
+  useEffect(() => {
+    loadAssets();
+  }, []);
+
+  const registerWarranty = async (asset: AdminAsset) => {
+    try {
+      setRegisteringId(asset.id);
+
+      const res = await fetch("/api/register-warranty", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          asset_id: asset.id,
+          asset_name: asset.name,
+          registered_by: asset.profiles?.full_name || "admin@eport.local",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Warranty API error", data);
+        alert(data.detail || data.message || "Failed to register warranty");
+        return;
+      }
+
+      // Mark this asset as having a registered warranty
+      setAssets((prev) =>
+        prev.map((a) =>
+          a.id === asset.id ? { ...a, warrantyRegistered: true } : a
+        )
+      );
+
+      alert("Warranty registered successfully!");
+    } catch (err) {
+      console.error("Error registering warranty", err);
+      alert("Unexpected error registering warranty");
+    } finally {
+      setRegisteringId(null);
+    }
   };
 
   return (
@@ -108,14 +155,43 @@ export default function AdminAssetsPage() {
 
                   <p>Purchased: {asset.date_purchased}</p>
                   <p className="font-semibold">Cost: R {asset.cost}</p>
+
+                  <p className="mt-1 text-sm">
+                    Status:{" "}
+                    <span
+                      className={
+                        asset.warrantyRegistered
+                          ? "text-green-700 font-semibold"
+                          : "text-gray-700"
+                      }
+                    >
+                      {asset.warrantyRegistered
+                        ? "Warranty Registered"
+                        : "Warranty Not Registered"}
+                    </span>
+                  </p>
                 </div>
 
-                <button
-                  onClick={() => openDelete(asset.id)}
-                  className="text-red-600 hover:underline"
-                >
-                  Delete
-                </button>
+                <div className="flex flex-col items-end gap-2">
+                  {!asset.warrantyRegistered && (
+                    <button
+                      onClick={() => registerWarranty(asset)}
+                      disabled={registeringId === asset.id}
+                      className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {registeringId === asset.id
+                        ? "Registering..."
+                        : "Register Warranty"}
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => openDelete(asset.id)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))
           )}

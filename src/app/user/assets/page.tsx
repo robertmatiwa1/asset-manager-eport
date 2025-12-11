@@ -15,8 +15,10 @@ export default function UserAssetsPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
 
-  const [loading, setLoading] = useState(true); // FIXED
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [registeringId, setRegisteringId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -26,15 +28,20 @@ export default function UserAssetsPage() {
     cost: "",
   });
 
-  // ---------------------------
   // INITIAL PAGE LOAD
-  // ---------------------------
   useEffect(() => {
     const init = async () => {
       const { user, role } = await getCurrentUserAndRole();
 
-      if (!user) return router.replace("/login");
-      if (role !== "USER") return router.replace("/admin/dashboard");
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      if (role !== "USER") {
+        router.replace("/admin/dashboard");
+        return;
+      }
 
       setUserId(user.id);
 
@@ -43,24 +50,29 @@ export default function UserAssetsPage() {
         supabase.from("departments").select("id, name"),
         supabase
           .from("assets")
-          .select("id, name, cost, date_purchased, categories(name), departments(name)")
+          .select(
+            "id, name, cost, date_purchased, categories(name), departments(name)"
+          )
           .eq("created_by", user.id),
       ]);
 
       setCategories(catRes.data || []);
       setDepartments(depRes.data || []);
-      setAssets(assetRes.data || []);
+      setAssets(
+        (assetRes.data || []).map((a: any) => ({
+          ...a,
+          warrantyRegistered: false,
+        }))
+      );
 
       setAuthorized(true);
       setLoading(false);
     };
 
     init();
-  }, []);
+  }, [router]);
 
-  // ---------------------------
   // CREATE ASSET
-  // ---------------------------
   const createAsset = async () => {
     setSaving(true);
 
@@ -70,6 +82,7 @@ export default function UserAssetsPage() {
     if (!activeUser) {
       alert("Your session expired. Please log in again.");
       router.replace("/login");
+      setSaving(false);
       return;
     }
 
@@ -103,17 +116,77 @@ export default function UserAssetsPage() {
     // Reload assets
     const { data } = await supabase
       .from("assets")
-      .select("id, name, cost, date_purchased, categories(name), departments(name)")
+      .select(
+        "id, name, cost, date_purchased, categories(name), departments(name)"
+      )
       .eq("created_by", activeUser.id);
 
-    setAssets(data || []);
+    setAssets(
+      (data || []).map((a: any) => ({
+        ...a,
+        warrantyRegistered: false,
+      }))
+    );
   };
 
-  // ---------------------------
+  // REGISTER WARRANTY
+  const registerWarranty = async (asset: any) => {
+    try {
+      setRegisteringId(asset.id);
+
+      const { data: sessionData } = await supabase.auth.getUser();
+      const activeUser = sessionData?.user;
+
+      if (!activeUser) {
+        alert("Your session expired. Please log in again.");
+        router.replace("/login");
+        return;
+      }
+
+      const registeredBy = activeUser.email || activeUser.id;
+
+      const res = await fetch("/api/register-warranty", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          asset_id: asset.id,
+          asset_name: asset.name,
+          registered_by: registeredBy,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Warranty API error:", data);
+        alert(data.detail || data.message || "Failed to register warranty");
+        return;
+      }
+
+      setAssets((prev) =>
+        prev.map((a) =>
+          a.id === asset.id ? { ...a, warrantyRegistered: true } : a
+        )
+      );
+
+      alert("Warranty registered successfully!");
+    } catch (err) {
+      console.error("Error registering warranty", err);
+      alert("Unexpected error registering warranty");
+    } finally {
+      setRegisteringId(null);
+    }
+  };
+
   // UI RENDERING
-  // ---------------------------
   if (!authorized || loading) {
-    return <div className="p-6 text-center text-gray-700">Loading your assets...</div>;
+    return (
+      <div className="p-6 text-center text-gray-700">
+        Loading your assets...
+      </div>
+    );
   }
 
   return (
@@ -125,11 +198,15 @@ export default function UserAssetsPage() {
         <h2 className="text-lg font-semibold">Add New Asset</h2>
 
         {categories.length === 0 && (
-          <p className="text-red-600">⚠ No categories available. Admin must create some.</p>
+          <p className="text-red-600">
+            ⚠ No categories available. Admin must create some.
+          </p>
         )}
 
         {departments.length === 0 && (
-          <p className="text-red-600">⚠ No departments available. Admin must create some.</p>
+          <p className="text-red-600">
+            ⚠ No departments available. Admin must create some.
+          </p>
         )}
 
         <input
@@ -147,7 +224,9 @@ export default function UserAssetsPage() {
         >
           <option value="">Select Category</option>
           {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
           ))}
         </select>
 
@@ -158,7 +237,9 @@ export default function UserAssetsPage() {
         >
           <option value="">Select Department</option>
           {departments.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
           ))}
         </select>
 
@@ -166,7 +247,9 @@ export default function UserAssetsPage() {
           type="date"
           className="border p-2 rounded w-full"
           value={form.date_purchased}
-          onChange={(e) => setForm({ ...form, date_purchased: e.target.value })}
+          onChange={(e) =>
+            setForm({ ...form, date_purchased: e.target.value })
+          }
         />
 
         <input
@@ -190,8 +273,6 @@ export default function UserAssetsPage() {
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Your Assets</h2>
 
-        {assets.length === 0 && <p>You haven't created any assets yet.</p>}
-
         {assets.map((asset) => (
           <div
             key={asset.id}
@@ -206,6 +287,35 @@ export default function UserAssetsPage() {
                 Purchased: {asset.date_purchased}
               </div>
               <div className="text-sm font-semibold">Cost: ${asset.cost}</div>
+
+              <div className="text-sm mt-1">
+                Status:{" "}
+                <span
+                  className={
+                    asset.warrantyRegistered
+                      ? "text-green-700 font-semibold"
+                      : "text-gray-700"
+                  }
+                >
+                  {asset.warrantyRegistered
+                    ? "Warranty Registered"
+                    : "Warranty Not Registered"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center">
+              {!asset.warrantyRegistered && (
+                <button
+                  onClick={() => registerWarranty(asset)}
+                  disabled={registeringId === asset.id}
+                  className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {registeringId === asset.id
+                    ? "Registering..."
+                    : "Register Warranty"}
+                </button>
+              )}
             </div>
           </div>
         ))}
